@@ -43,3 +43,21 @@ class ScanResponse(BaseModel):
     videos_found: int
     videos_added: int
     errors: List[str] = []
+
+# Nouveaux schémas pour le téléchargement
+class DownloadRequest(BaseModel):
+    url: str
+    quality: Optional[str] = "best"  # best, 1080p, 720p, 480p, etc.
+
+class DownloadProgress(BaseModel):
+    task_id: str
+    status: str  # pending, downloading, processing, completed, error
+    progress: Optional[float] = None
+    speed: Optional[str] = None
+    eta: Optional[str] = None
+    filename: Optional[str] = None
+    error: Optional[str] = None
+
+class DownloadResponse(BaseModel):
+    task_id: str
+    message: str

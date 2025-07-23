@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine, Base
-from .api import videos, scanner
+from .api import videos, scanner, download
 import os
 
 # Create tables
@@ -13,7 +13,7 @@ app = FastAPI(title="YouTube Library API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -22,6 +22,7 @@ app.add_middleware(
 # Include routers
 app.include_router(videos.router, prefix="/api", tags=["videos"])
 app.include_router(scanner.router, prefix="/api", tags=["scanner"])
+app.include_router(download.router, prefix="/api", tags=["download"])
 
 # Serve video files
 if os.getenv("MEDIA_PATH"):
