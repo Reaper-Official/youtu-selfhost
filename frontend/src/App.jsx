@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import VideoGrid from './components/VideoGrid';
 import VideoPlayer from './components/VideoPlayer';
+import DownloadModal from './components/DownloadModal';
 import { videoService } from './services/api';
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
   const [isScanning, setIsScanning] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   useEffect(() => {
     loadVideos();
@@ -67,11 +69,20 @@ function App() {
     }
   };
 
+  const handleDownload = () => {
+    setShowDownloadModal(true);
+  };
+
+  const handleDownloadComplete = () => {
+    loadVideos(); // Reload videos after download
+  };
+
   return (
     <div className="min-h-screen bg-youtube-dark">
       <Header 
         onSearch={handleSearch}
         onScan={handleScan}
+        onDownload={handleDownload}
         isScanning={isScanning}
       />
       
@@ -92,6 +103,12 @@ function App() {
           onWatched={handleVideoWatched}
         />
       )}
+      
+      <DownloadModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        onDownloadComplete={handleDownloadComplete}
+      />
     </div>
   );
 }

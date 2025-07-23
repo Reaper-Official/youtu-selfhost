@@ -6,3 +6,4 @@ yt-dlp==2023.11.16
 python-dotenv==1.0.0
 aiofiles==23.2.1
 python-multipart==0.0.6
+asyncio==3.4.3
