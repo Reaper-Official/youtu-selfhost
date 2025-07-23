@@ -74,7 +74,7 @@ function App() {
   };
 
   const handleDownloadComplete = () => {
-    loadVideos(); // Reload videos after download
+    loadVideos();
   };
 
   return (
