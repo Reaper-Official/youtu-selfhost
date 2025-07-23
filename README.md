@@ -24,7 +24,7 @@ Ce projet propose un script d’installation qui automatise l’intégralité du
 ### 1. Exécuter le script
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/Reaper-Official/youtu-selfhost/install/install.sh | sudo bash
+wget -qO- WAIT FOR NEWS | sudo bash
 ```
 
 ### 2. Ce que fait ce script
