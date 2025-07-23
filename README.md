@@ -17,91 +17,30 @@ Un système de médiathèque personnel pour organiser et visionner vos vidéos Y
 - Node.js 14+
 - yt-dlp installé (`pip install yt-dlp`)
 
-## 🛠️ Installation
+## ⚡ Installation automatique (recommandée)
 
-### 1. Cloner le dépôt
-```bash
-git clone https://https://github.com/Reaper-Official/youtu-selfhost/released.git
-cd youtu-selfhost
-```
+Ce projet propose un script d’installation qui automatise l’intégralité du processus.
 
-### 2. Configuration du Backend
+### 1. Exécuter le script
 
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Sur Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Copier et configurer le fichier .env
-cp .env.example .env
-# Éditer .env avec votre chemin de vidéos
+wget -qO- https://raw.githubusercontent.com/Reaper-Official/youtu-selfhost/install/install.sh | sudo bash
 ```
 
-### 3. Configuration du Frontend
+### 2. Ce que fait ce script
 
-```bash
-cd ../frontend
-npm install
+```text
+🧬 Clone le dépôt GitHub youtu-selfhost
+
+🧰 Installe les dépendances système et Python du backend
+
+⚙️ Installe les dépendances Node.js du frontend
+
+🗂️ Crée automatiquement les fichiers .env nécessaires
+
+🧾 Affiche les étapes post-installation à suivre
 ```
 
-### 4. Lancer l'application
-
-**Backend :**
-```bash
-cd backend
-uvicorn app.main:app --reload
-```
-
-**Frontend :**
-```bash
-cd frontend
-npm start
-```
-
-L'application sera accessible sur http://localhost:3000
-
-## 🐳 Docker
-
-Vous pouvez aussi utiliser Docker Compose :
-
-```bash
-# Configurer MEDIA_PATH dans votre environnement
-export MEDIA_PATH=/chemin/vers/vos/videos
-
-# Lancer avec Docker Compose
-docker-compose up
-```
-
-## 📝 Utilisation
-
-1. **Configurer le chemin des vidéos** : Éditez `MEDIA_PATH` dans le fichier `.env`
-
-2. **Scanner vos vidéos** : Cliquez sur "Scan Library" pour détecter automatiquement vos vidéos
-
-3. **Format des noms de fichiers** : Les vidéos doivent contenir l'ID YouTube dans leur nom :
-   - `Ma super vidéo - dQw4w9WgXcQ.mp4`
-   - `[dQw4w9WgXcQ] Ma super vidéo.mkv`
-   - `Ma super vidéo (dQw4w9WgXcQ).webm`
-
-4. **Visionner** : Cliquez sur une vidéo pour la regarder dans le lecteur intégré
-
-## 🔧 Configuration avancée
-
-### API YouTube (Optionnel)
-
-Pour de meilleures performances, vous pouvez utiliser l'API YouTube officielle :
-
-1. Obtenez une clé API sur [Google Cloud Console](https://console.cloud.google.com/)
-2. Ajoutez-la dans votre `.env` : `YOUTUBE_API_KEY=votre_cle_api`
-
-### Structure de la base de données
-
-La base de données SQLite stocke :
-- Métadonnées des vidéos
-- Statistiques de visionnage
-- Chemins des fichiers
-- Tags et catégories
 
 ## 🤝 Contribution
 
