@@ -13,7 +13,7 @@ app = FastAPI(title="YouTube Library API")
 # Configure CORS - TRÈS IMPORTANT
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Accepte toutes les origines
+    allow_origins=["*"],  # Permet toutes les origines
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
