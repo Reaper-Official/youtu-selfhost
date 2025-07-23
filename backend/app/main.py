@@ -10,13 +10,14 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="YouTube Library API")
 
-# Configure CORS - Plus permissif
+# Configure CORS - TRÈS IMPORTANT
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permet toutes les origines
+    allow_origins=["*"],  # Accepte toutes les origines
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Include routers
