@@ -21,7 +21,7 @@ Un système de médiathèque personnel pour organiser et visionner vos vidéos Y
 
 ### 1. Cloner le dépôt
 ```bash
-git clone https://github.com/yourusername/youtu-selfhost.git
+git clone https://https://github.com/Reaper-Official/youtu-selfhost/released/released.git
 cd youtu-selfhost
 ```
 
