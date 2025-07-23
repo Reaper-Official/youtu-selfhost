@@ -13,6 +13,13 @@ export const videoService = {
   deleteVideo: (id) => api.delete(`/videos/${id}`),
   getChannels: () => api.get('/channels'),
   scanVideos: (data) => api.post('/scan', data),
+  
+  // Download endpoints
+  downloadVideo: (data) => api.post('/download', data),
+  getDownloadStatus: (taskId) => api.get(`/download/${taskId}`),
+  getAllDownloads: () => api.get('/downloads'),
+  cancelDownload: (taskId) => api.delete(`/download/${taskId}`),
+  getVideoMetadata: (data) => api.post('/download/metadata', data),
 };
 
 export default api;
