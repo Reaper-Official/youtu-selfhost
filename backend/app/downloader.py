@@ -1,17 +1,24 @@
-import yt_dlp
 import os
 import uuid
 import glob
+import logging
+import ssl
+import urllib3
 from typing import Dict, Optional
 from pathlib import Path
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
 from .models import Video
 from .utils.metadata import MetadataExtractor
 import json
+import subprocess
+import sys
+
+# Désactiver SSL et warnings
+ssl._create_default_https_context = ssl._create_unverified_context
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -30,17 +37,14 @@ class VideoDownloader:
         def hook(d):
             try:
                 if d['status'] == 'downloading':
-                    # Calculer la progression
                     downloaded = d.get('downloaded_bytes', 0)
                     total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
                     
                     if total > 0:
                         progress = (downloaded / total) * 100
                     else:
-                        # Si pas de taille totale, utiliser le fragment
-                        progress = d.get('fragment_index', 0) * 10  # Estimation
+                        progress = d.get('fragment_index', 0) * 10
                     
-                    # Récupérer la vitesse et l'ETA
                     speed = d.get('speed')
                     if speed:
                         if speed > 1024 * 1024:
@@ -80,24 +84,159 @@ class VideoDownloader:
 
     def _get_video_id_from_url(self, url: str) -> Optional[str]:
         """Extraire l'ID de la vidéo depuis l'URL YouTube"""
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': True
-        }
+        import re
+        patterns = [
+            r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+            r'(?:embed\/)([0-9A-Za-z_-]{11})',
+            r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
+
+    def _download_with_yt_dlp(self, url: str, video_id: str) -> Optional[str]:
+        """Méthode 1: yt-dlp avec toutes les options SSL désactivées"""
         try:
+            import yt_dlp
+            
+            output_template = os.path.join(self.download_path, f"%(title)s-{video_id}.%(ext)s")
+            
+            ydl_opts = {
+                'outtmpl': output_template,
+                'progress_hooks': [self._progress_hook(video_id)],
+                'format': 'best[ext=mp4]/best',
+                'merge_output_format': 'mp4',
+                
+                # SSL complètement désactivé
+                'no_check_certificate': True,
+                'prefer_insecure': True,
+                
+                # Robustesse
+                'socket_timeout': 60,
+                'retries': 10,
+                'fragment_retries': 10,
+                
+                # Headers
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'referer': 'https://www.youtube.com/',
+                
+                # Extracteur
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'web', 'ios'],
+                        'skip': ['hls']
+                    }
+                },
+                
+                # Logging
+                'quiet': False,
+                'no_warnings': False,
+            }
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                return info.get('id')
+                logger.info(f"Downloading with yt-dlp: {video_id}")
+                ydl.download([url])
+                
+                # Chercher le fichier téléchargé
+                pattern = os.path.join(self.download_path, f"*{video_id}*")
+                files = glob.glob(pattern)
+                if files:
+                    filename = max(files, key=os.path.getctime)
+                    logger.info(f"yt-dlp success: {filename}")
+                    return filename
+                    
         except Exception as e:
-            logger.error(f"Error extracting video ID: {str(e)}")
-            return None
+            logger.warning(f"yt-dlp failed: {str(e)}")
+        
+        return None
+
+    def _download_with_subprocess(self, url: str, video_id: str) -> Optional[str]:
+        """Méthode 2: yt-dlp via subprocess avec variables d'environnement"""
+        try:
+            output_template = os.path.join(self.download_path, f"%(title)s-{video_id}.%(ext)s")
+            
+            cmd = [
+                'yt-dlp',
+                '--no-check-certificate',
+                '--prefer-insecure',
+                '--format', 'best[ext=mp4]/best',
+                '--output', output_template,
+                '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                '--referer', 'https://www.youtube.com/',
+                '--socket-timeout', '60',
+                '--retries', '10',
+                '--fragment-retries', '10',
+                url
+            ]
+            
+            env = os.environ.copy()
+            env.update({
+                'PYTHONHTTPSVERIFY': '0',
+                'CURL_CA_BUNDLE': '',
+                'REQUESTS_CA_BUNDLE': '',
+                'SSL_VERIFY': 'False'
+            })
+            
+            logger.info(f"Downloading with subprocess: {video_id}")
+            result = subprocess.run(cmd, capture_output=True, text=True, 
+                                  timeout=600, env=env)
+            
+            if result.returncode == 0:
+                pattern = os.path.join(self.download_path, f"*{video_id}*")
+                files = glob.glob(pattern)
+                if files:
+                    filename = max(files, key=os.path.getctime)
+                    logger.info(f"subprocess success: {filename}")
+                    return filename
+            else:
+                logger.warning(f"subprocess stderr: {result.stderr}")
+                
+        except Exception as e:
+            logger.warning(f"subprocess failed: {str(e)}")
+        
+        return None
+
+    def _download_with_youtube_dl(self, url: str, video_id: str) -> Optional[str]:
+        """Méthode 3: youtube-dl en fallback"""
+        try:
+            output_template = os.path.join(self.download_path, f"%(title)s-{video_id}.%(ext)s")
+            
+            cmd = [
+                'youtube-dl',
+                '--no-check-certificate',
+                '--ignore-errors',
+                '--format', 'best[ext=mp4]/best',
+                '--output', output_template,
+                url
+            ]
+            
+            env = os.environ.copy()
+            env['PYTHONHTTPSVERIFY'] = '0'
+            
+            logger.info(f"Downloading with youtube-dl: {video_id}")
+            result = subprocess.run(cmd, capture_output=True, text=True, 
+                                  timeout=600, env=env)
+            
+            if result.returncode == 0:
+                pattern = os.path.join(self.download_path, f"*{video_id}*")
+                files = glob.glob(pattern)
+                if files:
+                    filename = max(files, key=os.path.getctime)
+                    logger.info(f"youtube-dl success: {filename}")
+                    return filename
+                    
+        except Exception as e:
+            logger.warning(f"youtube-dl failed: {str(e)}")
+        
+        return None
 
     async def download_video(self, url: str, quality: str = "best", db: Session = None) -> str:
         """Démarrer le téléchargement d'une vidéo et retourner l'ID de la tâche"""
         task_id = str(uuid.uuid4())
         
-        # Initialiser le statut du téléchargement
         self.active_downloads[task_id] = {
             'task_id': task_id,
             'status': 'pending',
@@ -108,7 +247,6 @@ class VideoDownloader:
             'error': None
         }
         
-        # Démarrer le téléchargement en arrière-plan
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
             self.executor,
@@ -122,166 +260,121 @@ class VideoDownloader:
         return task_id
 
     def _download_video_sync(self, url: str, quality: str, task_id: str, db: Session = None):
-        """Fonction de téléchargement synchrone exécutée dans un thread"""
+        """Fonction de téléchargement avec plusieurs méthodes de fallback"""
         try:
-            # Extraire l'ID de la vidéo
             video_id = self._get_video_id_from_url(url)
             if not video_id:
                 raise ValueError("Could not extract video ID from URL")
             
-            logger.info(f"Starting download for video ID: {video_id}")
+            logger.info(f"FORCE DOWNLOAD starting for: {video_id}")
             
-            # Vérifier si la vidéo existe déjà
+            # Vérifier si existe déjà
             if db:
                 existing_video = db.query(Video).filter(Video.id == video_id).first()
                 if existing_video:
                     self.active_downloads[task_id]['status'] = 'completed'
                     self.active_downloads[task_id]['error'] = 'Video already exists in library'
-                    logger.info(f"Video {video_id} already exists")
                     return
             
-            # Configurer les options de téléchargement
-            # Configurer les options de téléchargement
-# Configurer les options de téléchargement
-            ydl_opts = {
-                'outtmpl': os.path.join(self.download_path, '%(title)s-%(id)s.%(ext)s'),
-                'progress_hooks': [self._progress_hook(task_id)],
-                'quiet': False,
-                'no_warnings': False,
-                # Options pour contourner les restrictions
-                'format': 'best[ext=mp4]/best',  # Préférer MP4
-                'merge_output_format': 'mp4',
-                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'referer': 'https://www.youtube.com/',
-                'nocheckcertificate': True,
-                'prefer_insecure': False,  # Changé à False pour plus de sécurité
-                'no_warnings': True,
-                'logtostderr': False,
-                'quiet': True,
-                'no_progress': False,
-                'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-                # Options supplémentaires pour la stabilité
-                'socket_timeout': 30,
-                'retries': 3,
-                'fragment_retries': 3,
-            }
+            self.active_downloads[task_id]['status'] = 'downloading'
+            self.active_downloads[task_id]['progress'] = 10
             
-            # Gérer la qualité demandée
-            if quality != "best":
-                if quality == "audio":
-                    ydl_opts['format'] = 'bestaudio/best'
-                    ydl_opts['postprocessors'] = [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'mp3',
-                        'preferredquality': '192',
-                    }]
-                else:
-                    # Essayer d'obtenir la qualité spécifique
-                    height = quality.replace('p', '')
-                    ydl_opts['format'] = f'best[height<={height}]/best'
+            # Essayer les différentes méthodes
+            methods = [
+                self._download_with_yt_dlp,
+                self._download_with_subprocess,
+                self._download_with_youtube_dl
+            ]
             
-            # Télécharger la vidéo
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                logger.info(f"Downloading video {video_id}...")
-                info = ydl.extract_info(url, download=True)
+            filename = None
+            for i, method in enumerate(methods, 1):
+                logger.info(f"Trying method {i}/{len(methods)}: {method.__name__}")
+                self.active_downloads[task_id]['progress'] = 10 + (i * 20)
                 
-                # Trouver le fichier téléchargé
-                # yt-dlp peut changer l'extension, donc on cherche avec l'ID
-                pattern = os.path.join(self.download_path, f"*{video_id}*")
-                downloaded_files = glob.glob(pattern)
-                
-                if downloaded_files:
-                    # Prendre le fichier le plus récent
-                    filename = max(downloaded_files, key=os.path.getctime)
-                    logger.info(f"Found downloaded file: {filename}")
-                else:
-                    # Fallback : essayer de reconstruire le nom
-                    filename = ydl.prepare_filename(info)
-                    # Vérifier différentes extensions possibles
-                    for ext in ['.mp4', '.webm', '.mkv', '.m4a', '.mp3']:
-                        test_file = filename.rsplit('.', 1)[0] + ext
-                        if os.path.exists(test_file):
-                            filename = test_file
-                            break
-                
-                if not os.path.exists(filename):
-                    raise FileNotFoundError(f"Downloaded file not found: {filename}")
-                
+                filename = method(url, video_id)
+                if filename and os.path.exists(filename):
+                    file_size = os.path.getsize(filename)
+                    if file_size > 1024:  # Au moins 1KB
+                        logger.info(f"✅ SUCCESS with {method.__name__}")
+                        break
+                    else:
+                        os.remove(filename)
+                        filename = None
+            
+            if filename and os.path.exists(filename):
                 self.active_downloads[task_id]['filename'] = filename
-                logger.info(f"Download completed: {filename}")
+                self.active_downloads[task_id]['progress'] = 90
+                
+                # Récupérer les métadonnées
+                metadata = self.metadata_extractor.get_metadata(video_id)
                 
                 # Ajouter à la base de données
-                if db and os.path.exists(filename):
-                    self._add_video_to_db(filename, video_id, info, db)
+                if db:
+                    self._add_video_to_db(filename, video_id, metadata or {}, db)
                 
                 self.active_downloads[task_id]['status'] = 'completed'
                 self.active_downloads[task_id]['progress'] = 100
                 
+                logger.info(f"✅ DOWNLOAD COMPLETED: {filename}")
+            else:
+                raise Exception("All download methods failed")
+                
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Download error for task {task_id}: {error_msg}")
+            logger.error(f"❌ DOWNLOAD FAILED for {task_id}: {error_msg}")
             self.active_downloads[task_id]['status'] = 'error'
             self.active_downloads[task_id]['error'] = error_msg
 
-    def _add_video_to_db(self, file_path: str, video_id: str, info: dict, db: Session):
+    def _add_video_to_db(self, file_path: str, video_id: str, metadata: dict, db: Session):
         """Ajouter la vidéo téléchargée à la base de données"""
         try:
             file_stat = Path(file_path).stat()
             
-            # Créer l'entrée vidéo
             video = Video(
                 id=video_id,
-                file_path=file_path,  # Chemin complet
-                title=info.get('title', 'Unknown Title'),
-                thumbnail_url=info.get('thumbnail'),
-                channel_name=info.get('uploader', 'Unknown Channel'),
-                channel_id=info.get('channel_id'),
-                duration=info.get('duration', 0),
-                description=info.get('description', ''),
-                view_count=info.get('view_count', 0),
-                like_count=info.get('like_count', 0),
-                resolution=f"{info.get('width', 0)}x{info.get('height', 0)}",
+                file_path=file_path,
+                title=metadata.get('title', Path(file_path).stem),
+                thumbnail_url=metadata.get('thumbnail_url'),
+                channel_name=metadata.get('channel_name', 'Unknown Channel'),
+                channel_id=metadata.get('channel_id'),
+                duration=metadata.get('duration', 0),
+                description=metadata.get('description', ''),
+                view_count=metadata.get('view_count', 0),
+                like_count=metadata.get('like_count', 0),
+                resolution=metadata.get('resolution', 'Unknown'),
                 file_size=file_stat.st_size,
                 added_date=datetime.utcnow()
             )
             
-            # Gérer les tags
-            if info.get('tags'):
-                video.tags = json.dumps(info['tags'][:50])  # Limiter à 50 tags
+            if metadata.get('tags'):
+                video.tags = json.dumps(metadata['tags'][:50])
             
-            # Gérer la date d'upload
-            if info.get('upload_date'):
+            if metadata.get('upload_date'):
                 try:
-                    video.upload_date = datetime.strptime(info['upload_date'], '%Y%m%d')
+                    video.upload_date = datetime.strptime(metadata['upload_date'], '%Y%m%d')
                 except:
                     pass
             
             db.add(video)
             db.commit()
-            logger.info(f"Added video to database: {video.title} (ID: {video_id})")
+            logger.info(f"✅ Added to database: {video.title}")
             
         except Exception as e:
-            logger.error(f"Error adding video to database: {str(e)}")
+            logger.error(f"❌ Database error: {str(e)}")
             db.rollback()
 
     def get_download_status(self, task_id: str) -> Optional[Dict]:
-        """Obtenir le statut d'un téléchargement"""
         return self.active_downloads.get(task_id)
 
     def get_all_downloads(self) -> Dict[str, Dict]:
-        """Obtenir tous les téléchargements actifs"""
         return self.active_downloads
 
     def cancel_download(self, task_id: str) -> bool:
-        """Annuler un téléchargement"""
         if task_id in self.active_downloads:
             self.active_downloads[task_id]['status'] = 'cancelled'
             self.active_downloads[task_id]['error'] = 'Download cancelled by user'
-            # TODO: Implémenter l'arrêt réel du processus yt-dlp
             return True
         return False
 
     def cleanup_old_downloads(self, hours: int = 24):
-        """Nettoyer les anciens téléchargements de la mémoire"""
-        # TODO: Implémenter le nettoyage des téléchargements terminés depuis X heures
         pass

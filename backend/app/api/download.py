@@ -5,7 +5,13 @@ from ..database import get_db
 from ..schemas import DownloadRequest, DownloadResponse, DownloadProgress
 from ..downloader import VideoDownloader
 import os
+import ssl
+import urllib3
 from dotenv import load_dotenv
+
+# Désactiver SSL globalement
+ssl._create_default_https_context = ssl._create_unverified_context
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 load_dotenv()
 router = APIRouter()
@@ -72,7 +78,11 @@ async def get_video_metadata(request: DownloadRequest):
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
-            'skip_download': True
+            'skip_download': True,
+            'no_check_certificate': True,
+            'prefer_insecure': True,
+            'socket_timeout': 30,
+            'retries': 3,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

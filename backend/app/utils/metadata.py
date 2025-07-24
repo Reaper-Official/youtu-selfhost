@@ -1,7 +1,13 @@
 import yt_dlp
 import re
+import ssl
+import urllib3
 from typing import Optional, Dict
 import logging
+
+# Désactiver SSL globalement
+ssl._create_default_https_context = ssl._create_unverified_context
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +17,11 @@ class MetadataExtractor:
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
-            'skip_download': True
+            'skip_download': True,
+            'no_check_certificate': True,
+            'prefer_insecure': True,
+            'socket_timeout': 30,
+            'retries': 5,
         }
     
     @staticmethod
@@ -30,7 +40,7 @@ class MetadataExtractor:
         return None
     
     def get_metadata(self, video_id: str) -> Optional[Dict]:
-        """Fetch metadata from YouTube"""
+        """Fetch metadata from YouTube with SSL disabled"""
         with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
             try:
                 info = ydl.extract_info(
