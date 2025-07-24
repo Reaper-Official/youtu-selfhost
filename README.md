@@ -1,4 +1,4 @@
-# YouTube Library 🎬
+# YouTube Library 🎬 (ne fonctionne pas encore)
 
 Un système de médiathèque personnel pour organiser et visionner vos vidéos YouTube téléchargées, inspiré de Jellyfin.
 
