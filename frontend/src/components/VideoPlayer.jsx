@@ -13,6 +13,17 @@ const VideoPlayer = ({ video, onClose, onWatched }) => {
 
   if (!video) return null;
 
+  // Extraire juste le nom du fichier du chemin complet
+  const getVideoUrl = () => {
+    if (video.file_path.startsWith('/')) {
+      // Chemin absolu - extraire le nom du fichier
+      const filename = video.file_path.split('/').pop();
+      return `/media/${filename}`;
+    }
+    // Chemin relatif
+    return `/media/${video.file_path}`;
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
       <div className="bg-youtube-dark rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden">
@@ -30,11 +41,18 @@ const VideoPlayer = ({ video, onClose, onWatched }) => {
           <div className="flex-1">
             <div className="aspect-video bg-black">
               <ReactPlayer
-                url={`/media/${video.file_path}`}
+                url={getVideoUrl()}
                 controls
                 width="100%"
                 height="100%"
                 playing
+                config={{
+                  file: {
+                    attributes: {
+                      controlsList: 'nodownload'
+                    }
+                  }
+                }}
               />
             </div>
           </div>
