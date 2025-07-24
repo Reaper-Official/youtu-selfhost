@@ -17,15 +17,19 @@ Un système de médiathèque personnel pour organiser et visionner vos vidéos Y
 - Node.js 14+
 - yt-dlp installé (`pip install yt-dlp`)
 
-## ⚡ Installation automatique (recommandée)
+#!/bin/bash
 
-Ce projet propose un script d’installation qui automatise l’intégralité du processus.
+# Script de déploiement rapide YouTube Library
+# Usage: curl -sSL [URL] | sudo bash
 
-### 1. Exécuter le script
+echo "🚀 Déploiement rapide YouTube Library..."
 
-```bash
-wget -qO- WAIT FOR NEWS | sudo bash
-```
+# Télécharger et exécuter le script d'installation complet
+wget -qO /tmp/youtube-install.sh https://raw.githubusercontent.com/votre-repo/install.sh
+chmod +x /tmp/youtube-install.sh
+/tmp/youtube-install.sh
+
+echo "✅ Déploiement terminé!"
 
 ### 2. Ce que fait ce script
 
