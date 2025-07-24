@@ -142,24 +142,29 @@ class VideoDownloader:
             
             # Configurer les options de téléchargement
             # Configurer les options de téléchargement
-ydl_opts = {
-    'outtmpl': os.path.join(self.download_path, '%(title)s-%(id)s.%(ext)s'),
-    'progress_hooks': [self._progress_hook(task_id)],
-    'quiet': False,
-    'no_warnings': False,
-    # Options pour contourner les restrictions
-    'format': 'best[ext=mp4]/best',  # Préférer MP4
-    'merge_output_format': 'mp4',
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'referer': 'https://www.youtube.com/',
-    'nocheckcertificate': True,  # ← AJOUTER CETTE LIGNE
-    'prefer_insecure': True,
-    'no_warnings': True,
-    'logtostderr': False,
-    'quiet': True,
-    'no_progress': False,
-    'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-}
+# Configurer les options de téléchargement
+            ydl_opts = {
+                'outtmpl': os.path.join(self.download_path, '%(title)s-%(id)s.%(ext)s'),
+                'progress_hooks': [self._progress_hook(task_id)],
+                'quiet': False,
+                'no_warnings': False,
+                # Options pour contourner les restrictions
+                'format': 'best[ext=mp4]/best',  # Préférer MP4
+                'merge_output_format': 'mp4',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'referer': 'https://www.youtube.com/',
+                'nocheckcertificate': True,
+                'prefer_insecure': False,  # Changé à False pour plus de sécurité
+                'no_warnings': True,
+                'logtostderr': False,
+                'quiet': True,
+                'no_progress': False,
+                'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+                # Options supplémentaires pour la stabilité
+                'socket_timeout': 30,
+                'retries': 3,
+                'fragment_retries': 3,
+            }
             
             # Gérer la qualité demandée
             if quality != "best":
